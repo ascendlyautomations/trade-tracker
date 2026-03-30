@@ -52,28 +52,26 @@ export default function SettingsPage() {
     setLoading(false)
   }
 
-  // 🔥 FIXED UPLOAD FUNCTION
+  // ✅ FIXED UPLOAD FUNCTION
   async function uploadAvatar() {
     if (!avatarFile || !user) return null
 
     const fileExt = avatarFile.name.split(".").pop()
-    const fileName = `${user.id}-${Date.now()}.${fileExt}`
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`
 
-    const { data, error } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from("avatars")
       .upload(fileName, avatarFile, {
         upsert: true
       })
 
-    console.log("UPLOAD RESULT:", { data, error })
+    console.log("UPLOAD RESULT:", { uploadData, uploadError })
 
-    // ❌ ONLY fail if REAL error
-    if (error) {
-      console.error("REAL UPLOAD ERROR:", error.message)
+    if (uploadError) {
+      console.error("REAL UPLOAD ERROR:", uploadError.message)
       return null
     }
 
-    // ✅ SUCCESS EVEN IF data is weird
     const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${fileName}`
 
     return publicUrl
@@ -89,11 +87,9 @@ export default function SettingsPage() {
     if (avatarFile) {
       const uploaded = await uploadAvatar()
 
-      // 🔥 ONLY update if success
       if (uploaded) {
         avatarUrl = uploaded
       }
-      // ❌ NO alert here anymore
     }
 
     const { error } = await supabase
@@ -109,6 +105,7 @@ export default function SettingsPage() {
       })
       .eq("id", user.id)
 
+    // ✅ FIXED ERROR HANDLING
     if (error) {
       alert(error.message)
     } else {
@@ -140,7 +137,13 @@ export default function SettingsPage() {
 
               <div className="w-16 h-16 rounded-full bg-gray-700 overflow-hidden">
                 {avatarPreview && (
-                  <img src={avatarPreview} className="w-full h-full object-cover" />
+                  <img
+                    src={avatarPreview}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/default-avatar.png"
+                    }}
+                  />
                 )}
               </div>
 
