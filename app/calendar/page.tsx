@@ -1,7 +1,7 @@
 "use client"
 import Navbar from "../components/Navbar"
 import { useEffect, useState } from "react"
-import { supabase } from "../../lib/supabase"
+import { supabase } from "../../lib/supabaseClient"
 
 export default function CalendarPage() {
   const [trades, setTrades] = useState<any[]>([])
@@ -15,7 +15,20 @@ export default function CalendarPage() {
   }, [])
 
   async function fetchTrades() {
-    const { data } = await supabase.from("trades").select("*")
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      setTrades([])
+      return
+    }
+
+    const { data } = await supabase
+      .from("trades")
+      .select("*")
+      .eq("user_id", user.id)
+
     if (data) setTrades(data)
   }
 

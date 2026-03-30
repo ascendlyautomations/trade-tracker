@@ -2,7 +2,7 @@
 
 import Navbar from "../components/Navbar"
 import { useEffect, useState, useMemo } from "react"
-import { supabase } from "../../lib/supabase"
+import { supabase } from "../../lib/supabaseClient"
 import {
   LineChart,
   Line,

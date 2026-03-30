@@ -30,7 +30,9 @@ export default function Leaderboard() {
 
     if (user) setUserId(user.id)
 
-    const { data } = await supabase.from("trades").select("*")
+    const { data } = await supabase
+      .from("trades")
+      .select("user_id, pnl, rr, created_at")
 
     if (data) setTrades(data)
   }
