@@ -224,13 +224,7 @@ export default function Dashboard() {
           Dashboard
         </h1>
 
-        {/* 🔥 PROFILE DISPLAY (NEW) */}
-        {profile && (
-          <div className="text-center mb-6 text-sm text-gray-300">
-            <p>Trader Type: <span className="text-blue-400">{profile.trader_type || "-"}</span></p>
-            <p>Experience: <span className="text-emerald-400">{profile.experience || "-"}</span></p>
-          </div>
-        )}
+
 
         <div className="flex justify-center mb-8">
           <select

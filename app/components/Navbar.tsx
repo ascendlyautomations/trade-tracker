@@ -124,7 +124,7 @@ export default function Navbar() {
                     Leaderboard
                   </button>
 
-                  <button onClick={() => router.push("/global-chat")} className="px-4 py-2 hover:bg-white/10 text-left">
+                  <button onClick={() => router.push("/chat")} className="px-4 py-2 hover:bg-white/10 text-left">
                     Global Chat
                   </button>
 
