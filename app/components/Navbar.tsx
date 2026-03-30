@@ -44,28 +44,13 @@ export default function Navbar() {
   async function fetchUnread() {
     if (!user) return
 
-    const { data: parts } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", user.id)
-
-    if (!parts) return
-
-    const convoIds = parts.map((p) => p.conversation_id)
-
-    if (convoIds.length === 0) {
-      setUnreadCount(0)
-      return
-    }
-
-    const { data: messages } = await supabase
+    const { count } = await supabase
       .from("direct_messages")
-      .select("id, sender_id")
-      .in("conversation_id", convoIds)
+      .select("*", { count: "exact", head: true })
+      .eq("recipient_id", user.id)
+      .eq("is_read", false)
 
-    const unread = messages?.filter((m) => m.sender_id !== user.id).length || 0
-
-    setUnreadCount(unread)
+    setUnreadCount(count ?? 0)
   }
 
   function setupRealtime() {

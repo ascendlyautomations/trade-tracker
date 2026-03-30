@@ -26,7 +26,7 @@ export default function DMPage() {
     return () => {
       if (channel) supabase.removeChannel(channel)
     }
-  }, [])
+  }, [id])
 
   useEffect(() => {
     scrollToBottom()
@@ -42,6 +42,7 @@ export default function DMPage() {
     await fetchMessages()
 
     if (user) {
+      await markConversationMessagesRead(user.id)
       await fetchOtherUser(user.id)
     }
   }
@@ -76,6 +77,15 @@ export default function DMPage() {
       .order("created_at", { ascending: true })
 
     setMessages(data || [])
+  }
+
+  async function markConversationMessagesRead(currentUserId: string) {
+    await supabase
+      .from("direct_messages")
+      .update({ is_read: true })
+      .eq("conversation_id", id)
+      .eq("recipient_id", currentUserId)
+      .eq("is_read", false)
   }
 
   function setupRealtime() {
@@ -121,11 +131,22 @@ export default function DMPage() {
       imageUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/screenshots/${fileName}`
     }
 
+    const { data: participants } = await supabase
+      .from("conversation_participants")
+      .select("user_id")
+      .eq("conversation_id", id)
+
+    const recipientId = participants?.find((p) => p.user_id !== user.id)
+      ?.user_id
+    if (!recipientId) return
+
     await supabase.from("direct_messages").insert({
       conversation_id: id,
       sender_id: user.id,
+      recipient_id: recipientId,
       content: input || "",
-      image_url: imageUrl
+      image_url: imageUrl,
+      is_read: false,
     })
 
     setInput("")
