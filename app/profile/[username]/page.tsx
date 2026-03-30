@@ -28,6 +28,47 @@ export default function ProfilePage() {
     fetchProfile()
   }, [username])
 
+  const fetchTrades = async (profileId: string) => {
+    const { data } = await supabase
+      .from("trades")
+      .select("*")
+      .eq("user_id", profileId)
+      .order("created_at", { ascending: false })
+
+    return data || []
+  }
+
+  /** STEP 2: fetch trades only when `profile.id` is available (filter is `user_id` = profile id). */
+  useEffect(() => {
+    if (!profile?.id) {
+      setTrades([])
+      return
+    }
+
+    console.log("PROFILE ID:", profile?.id)
+
+    const isPrivateProfile = profile.is_private === true
+    const uid = currentUserId
+    const canLoad =
+      !isPrivateProfile || uid === profile.id || isFollowing
+
+    if (!canLoad) {
+      setTrades([])
+      return
+    }
+
+    let cancelled = false
+
+    ;(async () => {
+      const rows = await fetchTrades(profile.id)
+      if (!cancelled) setTrades(rows)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.id, profile?.is_private, currentUserId, isFollowing])
+
   async function fetchProfile() {
     setLoading(true)
 
@@ -38,12 +79,13 @@ export default function ProfilePage() {
     // 🔥 UPDATED: include avatar_url
     const { data: prof, error } = await supabase
       .from("profiles")
-      .select("id, username, name, bio, avatar_url")
+      .select("*")
       .eq("username", username)
       .single()
 
     if (!prof || error) {
       setProfile(null)
+      setTrades([])
       setFollowersCount(0)
       setFollowingCount(0)
       setIsFollowing(false)
@@ -53,6 +95,7 @@ export default function ProfilePage() {
 
     setProfile(prof)
 
+    let following = false
     if (uid && uid !== prof.id) {
       const { data: followRow } = await supabase
         .from("followers")
@@ -61,7 +104,8 @@ export default function ProfilePage() {
         .eq("following_id", prof.id)
         .maybeSingle()
 
-      setIsFollowing(!!followRow)
+      following = !!followRow
+      setIsFollowing(following)
     } else {
       setIsFollowing(false)
     }
@@ -79,13 +123,6 @@ export default function ProfilePage() {
     setFollowersCount(followersN ?? 0)
     setFollowingCount(followingN ?? 0)
 
-    const { data: tradesData } = await supabase
-      .from("trades")
-      .select("*")
-      .eq("user_id", prof.id)
-      .order("created_at", { ascending: false })
-
-    setTrades(tradesData || [])
     setLoading(false)
   }
 
@@ -253,12 +290,25 @@ export default function ProfilePage() {
     setFollowingModalUsers(profs ?? [])
   }
 
-  // 🔥 STATS
-  const totalTrades = trades.length
-  const wins = trades.filter((t) => t.pnl > 0)
-  const totalPnL = trades.reduce((sum, t) => sum + (t.pnl || 0), 0)
-  const winRate = totalTrades ? (wins.length / totalTrades) * 100 : 0
-  const bestTrade = Math.max(...trades.map((t) => t.pnl || 0), 0)
+  const canViewTrades =
+    !!profile &&
+    (profile.is_private !== true ||
+      currentUserId === profile.id ||
+      isFollowing)
+
+  // 🔥 STATS (same trade cards + metrics layout; only when trades are visible)
+  const totalTrades = canViewTrades ? trades.length : 0
+  const wins = canViewTrades ? trades.filter((t) => t.pnl > 0) : []
+  const totalPnL = canViewTrades
+    ? trades.reduce((sum, t) => sum + (t.pnl || 0), 0)
+    : 0
+  const winRate =
+    canViewTrades && totalTrades ? (wins.length / totalTrades) * 100 : 0
+  const avgRR =
+    canViewTrades && totalTrades
+      ? trades.reduce((sum, t) => sum + (Number(t.rr) || 0), 0) /
+        totalTrades
+      : 0
 
   function formatCurrency(value: number) {
     return `${value < 0 ? "-" : ""}$${Math.abs(value).toLocaleString()}`
@@ -373,71 +423,72 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* 🔥 STATS */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+          {canViewTrades ? (
+            <>
+              {/* 🔥 STATS */}
+              <div className="mb-10 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Stat title="Trades" value={totalTrades} />
 
-            <Stat title="Trades" value={totalTrades} />
+                <Stat title="Win %" value={`${winRate.toFixed(1)}%`} />
 
-            <Stat title="Win %" value={`${winRate.toFixed(1)}%`} />
+                <Stat
+                  title="Total P&L"
+                  value={formatCurrency(totalPnL)}
+                  positive={totalPnL >= 0}
+                />
 
-            <Stat
-              title="Total P&L"
-              value={formatCurrency(totalPnL)}
-              positive={totalPnL >= 0}
-            />
-
-            <Stat
-              title="Best Trade"
-              value={formatCurrency(bestTrade)}
-              positive={bestTrade >= 0}
-            />
-
-          </div>
-
-          {/* 🔥 TRADES */}
-          <div>
-
-            <h2 className="text-xl mb-4 font-semibold">
-              Trades
-            </h2>
-
-            {trades.length === 0 ? (
-              <p className="text-gray-400">No trades yet</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                {trades.map((trade) => (
-                  <div
-                    key={trade.id}
-                    className="bg-white/5 border border-white/10 p-4 rounded-xl"
-                  >
-
-                    <p className="font-semibold">
-                      {trade.ticker} • {trade.direction}
-                    </p>
-
-                    <p className={trade.pnl >= 0 ? "text-green-400" : "text-red-400"}>
-                      {formatCurrency(trade.pnl)}
-                    </p>
-
-                    {trade.image_url && (
-                      <img
-                        src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/screenshots/${trade.image_url}`}
-                        className="mt-3 rounded-lg"
-                      />
-                    )}
-
-                    <p className="text-xs text-gray-400 mt-2">
-                      {new Date(trade.created_at).toLocaleDateString()}
-                    </p>
-
-                  </div>
-                ))}
-
+                <Stat title="Avg RR" value={avgRR.toFixed(2)} />
               </div>
-            )}
 
-          </div>
+              {/* 🔥 TRADES */}
+              <div>
+                <h2 className="mb-4 text-xl font-semibold">Trades</h2>
+
+                {trades.length === 0 ? (
+                  <p className="text-gray-400">No trades yet</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {trades.map((trade) => (
+                      <div
+                        key={trade.id}
+                        className="rounded-xl border border-white/10 bg-white/5 p-4"
+                      >
+                        <p className="font-semibold">
+                          {trade.ticker} • {trade.direction}
+                        </p>
+
+                        <p
+                          className={
+                            trade.pnl >= 0 ? "text-green-400" : "text-red-400"
+                          }
+                        >
+                          {formatCurrency(trade.pnl)}
+                        </p>
+
+                        {trade.image_url && (
+                          <img
+                            src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/screenshots/${trade.image_url}`}
+                            className="mt-3 rounded-lg"
+                          />
+                        )}
+
+                        <p className="mt-2 text-xs text-gray-400">
+                          {new Date(trade.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-white/5 py-16 text-center">
+              <p className="text-lg text-gray-300">Private Profile</p>
+              <p className="mt-2 text-sm text-gray-400">
+                Follow this user to see their trades and stats.
+              </p>
+            </div>
+          )}
 
         </div>
 
